@@ -9,7 +9,8 @@
   "scripts": {
     "test": "vitest run",
     "build": "tsc",
-    "dev": "tsx src/runner.ts"
+    "dev": "tsx src/runner.ts",
+    "build:image:python": "docker build -t judge-python:3.11 images/python"
   },
   "repository": {
     "type": "git",
