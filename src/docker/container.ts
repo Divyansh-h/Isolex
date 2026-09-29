@@ -23,6 +23,7 @@ export interface SandboxOptions {
 export async function createSandboxContainer(
   image: string,
   cmd: string[],
+  codeDir: string,
   options: SandboxOptions = {}
 ): Promise<Container> {
   const memoryMB = options.memoryMB || 256;
@@ -44,6 +45,10 @@ export async function createSandboxContainer(
       CapDrop: ['ALL'],
       SecurityOpt: ['no-new-privileges'],
       AutoRemove: false, // We'll remove manually to inspect the exit state
+      Binds: [`${codeDir}:/sandbox:ro`],
+      Tmpfs: {
+        '/tmp': 'size=64m',
+      },
     },
   });
 
