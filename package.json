@@ -10,7 +10,8 @@
     "test": "vitest run",
     "build": "tsc",
     "dev": "tsx src/runner.ts",
-    "build:image:python": "docker build -t judge-python:3.11 images/python"
+    "build:image:python": "docker build -t judge-python:3.11 images/python",
+    "build:image:cpp": "docker build -t judge-cpp:13 images/cpp"
   },
   "repository": {
     "type": "git",

@@ -9,6 +9,16 @@ export const languageRegistry: Record<string, LanguageConfig> = {
     runCmd: ['python', 'main.py'],
     runTimeoutMs: 5000,
   },
+  cpp: {
+    id: 'cpp',
+    displayName: 'C++ (GCC 13)',
+    image: 'gcc:13-slim',
+    sourceFilename: 'main.cpp',
+    compileCmd: ['g++', '-O2', '-o', 'main', 'main.cpp'],
+    runCmd: ['./main'],
+    compileTimeoutMs: 10000,
+    runTimeoutMs: 5000,
+  },
 };
 
 export function getLanguageConfig(id: string): LanguageConfig {
