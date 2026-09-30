@@ -5,6 +5,7 @@ export interface ExecutionResult {
   stdout: string;
   stderr: string;
   exitCode: number;
+  timedOut?: boolean;
 }
 
 /**
@@ -13,11 +14,13 @@ export interface ExecutionResult {
  * 
  * @param container The dockerode Container instance to run
  * @param stdin The input string to write to standard input
+ * @param timeoutMs Maximum execution time in milliseconds (default 5000)
  * @returns Promise resolving to an ExecutionResult object
  */
 export async function runContainer(
   container: Container,
-  stdin: string
+  stdin: string,
+  timeoutMs: number = 5000
 ): Promise<ExecutionResult> {
   // Attach to the container to gain access to streams
   const stream = await container.attach({
@@ -57,13 +60,41 @@ export async function runContainer(
   // Start the container
   await container.start();
 
-  // Wait for the container to complete its execution
-  const waitResult = await container.wait();
+  // Wait for the container to complete its execution or hit the timeout
+  let timedOut = false;
+  let timer: NodeJS.Timeout | undefined;
+
+  const timeoutPromise = new Promise<any>((resolve) => {
+    timer = setTimeout(() => {
+      timedOut = true;
+      resolve({ StatusCode: 124 }); // 124 is a common exit code for timeouts
+    }, timeoutMs);
+  });
+
+  let waitResult: any;
+  try {
+    waitResult = await Promise.race([
+      container.wait(),
+      timeoutPromise
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+
+  // If the timeout won the race, forcefully kill the container
+  if (timedOut) {
+    try {
+      await container.kill();
+    } catch (e) {
+      // Ignore errors if the container is already dead
+    }
+  }
 
   // Combine the buffers and return the results
   return {
     stdout: Buffer.concat(stdoutBuffers).toString('utf-8'),
     stderr: Buffer.concat(stderrBuffers).toString('utf-8'),
     exitCode: waitResult.StatusCode,
+    timedOut,
   };
 }
