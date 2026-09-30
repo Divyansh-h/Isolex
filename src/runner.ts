@@ -49,3 +49,33 @@ export async function executeCode(params: ExecuteParams): Promise<ExecutionResul
     }
   }
 }
+
+export interface ExecuteRequest {
+  code: string;
+  language: 'python';
+  stdin?: string;
+  timeLimitMs?: number;
+  memoryLimitMb?: number;
+}
+
+/**
+ * End-to-end execution entry point.
+ * Specific to supported languages.
+ */
+export async function execute(req: ExecuteRequest): Promise<ExecutionResult> {
+  if (req.language !== 'python') {
+    throw new Error(`Language ${req.language} is not supported.`);
+  }
+
+  return executeCode({
+    code: req.code,
+    filename: 'main.py',
+    image: 'python:3.11-alpine',
+    cmd: ['python', 'main.py'],
+    stdin: req.stdin,
+    timeoutMs: req.timeLimitMs,
+    options: {
+      memoryMB: req.memoryLimitMb,
+    },
+  });
+}
