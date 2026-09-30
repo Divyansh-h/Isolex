@@ -6,6 +6,8 @@ export interface ExecutionResult {
   stderr: string;
   exitCode: number;
   timedOut?: boolean;
+  memoryExceeded?: boolean;
+  containerExitCode?: number;
 }
 
 /**
@@ -90,11 +92,18 @@ export async function runContainer(
     }
   }
 
+  // Inspect the container to check for resource limit failures like OOM
+  const inspectData = await container.inspect();
+  const memoryExceeded = inspectData.State.OOMKilled;
+  const containerExitCode = inspectData.State.ExitCode;
+
   // Combine the buffers and return the results
   return {
     stdout: Buffer.concat(stdoutBuffers).toString('utf-8'),
     stderr: Buffer.concat(stderrBuffers).toString('utf-8'),
     exitCode: waitResult.StatusCode,
     timedOut,
+    ...(memoryExceeded && { memoryExceeded: true }),
+    containerExitCode,
   };
 }
