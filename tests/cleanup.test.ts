@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { executeCode } from '../src/runner';
+import { execute } from '../src/runner';
 import * as containerModule from '../src/docker/container';
 import * as executeModule from '../src/docker/execute';
 import { promises as fs } from 'fs';
@@ -20,11 +20,9 @@ describe('Execution Lifecycle Cleanup', () => {
 
     // Execute and expect it to reject with our specific error
     await expect(
-      executeCode({
+      execute({
         code: 'print("Hello World")',
-        filename: 'main.py',
-        image: 'python:3.11-alpine',
-        cmd: ['python', 'main.py']
+        language: 'python'
       })
     ).rejects.toThrow('Intentional crash mid-execution');
 

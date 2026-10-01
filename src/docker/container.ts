@@ -8,6 +8,8 @@ export interface SandboxOptions {
   cpus?: number;
   /** Process ID limit (defaults to 64) */
   pidsLimit?: number;
+  /** Mount the code directory as read-only (defaults to true) */
+  readOnlyCodeDir?: boolean;
 }
 
 /**
@@ -45,7 +47,7 @@ export async function createSandboxContainer(
       CapDrop: ['ALL'],
       SecurityOpt: ['no-new-privileges'],
       AutoRemove: false, // We'll remove manually to inspect the exit state
-      Binds: [`${codeDir}:/sandbox:ro`],
+      Binds: [`${codeDir}:/sandbox:${options.readOnlyCodeDir === false ? 'rw' : 'ro'}`],
       Tmpfs: {
         '/tmp': 'size=64m',
       },

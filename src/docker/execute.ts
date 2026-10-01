@@ -8,6 +8,8 @@ export interface ExecutionResult {
   timedOut?: boolean;
   memoryExceeded?: boolean;
   containerExitCode?: number;
+  verdict?: string;
+  compileOutput?: string;
 }
 
 /**

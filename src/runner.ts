@@ -3,34 +3,37 @@ import { Container } from 'dockerode';
 import { prepareCodeDir } from './utils/fs';
 import { createSandboxContainer, SandboxOptions } from './docker/container';
 import { runContainer, ExecutionResult } from './docker/execute';
+import { getLanguageConfig } from './languages/registry';
 
-export interface ExecuteParams {
+export interface ExecuteRequest {
   code: string;
-  filename: string;
-  image: string;
-  cmd: string[];
+  language: string;
+  stdin?: string;
+  timeLimitMs?: number;
+  memoryLimitMb?: number;
+}
+
+interface SandboxPhaseOptions {
   stdin?: string;
   timeoutMs?: number;
-  options?: SandboxOptions;
+  containerOpts?: SandboxOptions;
 }
 
 /**
- * Orchestrates the full lifecycle of a sandbox execution securely.
- * Guarantees cleanup of containers and temporary directories via try/finally.
+ * Runs a single phase (compile or run) inside a sandbox container.
+ * Guarantees container cleanup.
  */
-export async function executeCode(params: ExecuteParams): Promise<ExecutionResult> {
-  let codeDir: string | undefined;
+export async function runSandboxPhase(
+  codeDir: string,
+  image: string,
+  cmd: string[],
+  options: SandboxPhaseOptions = {}
+): Promise<ExecutionResult> {
   let container: Container | undefined;
-
   try {
-    codeDir = await prepareCodeDir(params.code, params.filename);
-    container = await createSandboxContainer(params.image, params.cmd, codeDir, params.options);
-    
-    // Start, wait, and capture output
-    const result = await runContainer(container, params.stdin || '', params.timeoutMs);
-    return result;
+    container = await createSandboxContainer(image, cmd, codeDir, options.containerOpts);
+    return await runContainer(container, options.stdin || '', options.timeoutMs);
   } finally {
-    // Guarantee cleanup of the container regardless of failure
     if (container) {
       try {
         await container.remove({ force: true });
@@ -38,7 +41,63 @@ export async function executeCode(params: ExecuteParams): Promise<ExecutionResul
         // Ignore if already removed or missing
       }
     }
+  }
+}
+
+/**
+ * End-to-end execution entry point.
+ * Specific to supported languages.
+ */
+export async function execute(req: ExecuteRequest): Promise<ExecutionResult> {
+  const config = getLanguageConfig(req.language);
+  let codeDir: string | undefined;
+
+  try {
+    codeDir = await prepareCodeDir(req.code, config.sourceFilename);
     
+    let compileOutput = '';
+    
+    // Compile phase
+    if (config.compileCmd) {
+      const compileResult = await runSandboxPhase(codeDir, config.image, config.compileCmd, {
+        timeoutMs: config.compileTimeoutMs,
+        containerOpts: {
+          readOnlyCodeDir: false
+        }
+      });
+      
+      compileOutput = compileResult.stderr;
+      
+      if (compileResult.exitCode !== 0) {
+        return {
+          verdict: 'CE',
+          compileOutput: compileResult.stderr,
+          stdout: compileResult.stdout,
+          stderr: compileResult.stderr,
+          exitCode: compileResult.exitCode,
+          timedOut: compileResult.timedOut,
+          memoryExceeded: compileResult.memoryExceeded,
+          containerExitCode: compileResult.containerExitCode
+        };
+      }
+    }
+
+    // Run phase
+    const runResult = await runSandboxPhase(codeDir, config.image, config.runCmd, {
+      stdin: req.stdin,
+      timeoutMs: req.timeLimitMs || config.runTimeoutMs,
+      containerOpts: {
+        memoryMB: req.memoryLimitMb,
+        readOnlyCodeDir: false
+      }
+    });
+    
+    if (compileOutput) {
+      runResult.compileOutput = compileOutput;
+    }
+    
+    return runResult;
+  } finally {
     // Guarantee cleanup of the temporary code directory
     if (codeDir) {
       try {
@@ -48,34 +107,4 @@ export async function executeCode(params: ExecuteParams): Promise<ExecutionResul
       }
     }
   }
-}
-
-export interface ExecuteRequest {
-  code: string;
-  language: 'python';
-  stdin?: string;
-  timeLimitMs?: number;
-  memoryLimitMb?: number;
-}
-
-/**
- * End-to-end execution entry point.
- * Specific to supported languages.
- */
-export async function execute(req: ExecuteRequest): Promise<ExecutionResult> {
-  if (req.language !== 'python') {
-    throw new Error(`Language ${req.language} is not supported.`);
-  }
-
-  return executeCode({
-    code: req.code,
-    filename: 'main.py',
-    image: 'python:3.11-alpine',
-    cmd: ['python', 'main.py'],
-    stdin: req.stdin,
-    timeoutMs: req.timeLimitMs,
-    options: {
-      memoryMB: req.memoryLimitMb,
-    },
-  });
 }
